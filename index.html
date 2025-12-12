@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Dark Mode To-Do App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+/* ================= GLOBAL ================= */
+body, html {
+  margin:0; padding:0;
+  font-family: 'Segoe UI', sans-serif;
+  background:#121212;
+  color:#eee;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow-x:hidden;
+}
+a { text-decoration:none; color:inherit; }
+
+/* ================= SIDEBAR ================= */
+#sidebar {
+  position:fixed;
+  top:0; left:0;
+  width:250px;
+  height:100%;
+  background:#1c1c1c;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.7);
+  transition: transform .3s ease;
+  z-index:100;
+}
+#sidebar.hidden { transform:translateX(-260px); }
+#sidebar h2 {
+  text-align:center; padding:20px 0; margin:0;
+  color:#0ff;
+  text-shadow: 0 0 5px #0ff;
+}
+#sidebar ul { list-style:none; padding:0; margin:0; }
+#sidebar ul li {
+  padding:15px 20px;
+  cursor:pointer;
+  border-left:4px solid transparent;
+  transition:.2s;
+}
+#sidebar ul li:hover {
+  background:#222;
+  border-left:4px solid #a0f;
+}
+#sidebar ul li.active { border-left:4px solid #0ff; background:#222; }
+#hamburger {
+  display:none;
+  position:fixed;
+  top:15px; left:15px;
+  z-index:110;
+  background:#0ff;
+  color:#121212;
+  border:none; padding:10px 12px; border-radius:5px;
+  cursor:pointer; font-size:18px;
+  box-shadow:0 0 10px #0ff;
+}
+
+/* ================= MAIN CONTENT ================= */
+#main {
+  flex:1;
+  margin-left:250px;
+  padding:25px;
+  transition: margin-left .3s ease;
+}
+
+/* TASK CONTROLS */
+.task-controls {
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-bottom:20px;
+}
+.task-controls input, select {
+  padding:10px;
+  border:none;
+  border-radius:5px;
+  flex:1;
+  background:#222;
+  color:#eee;
+}
+button {
+  padding:10px 15px;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
+  transition:.2s;
+}
+button.primary { background:#0ff; color:#121212; box-shadow:0 0 5px #0ff; }
+button.primary:hover { box-shadow:0 0 20px #0ff; }
+#searchBar { width:100%; padding:10px; border-radius:5px; border:none; background:#222; color:#eee; margin-bottom:15px; }
+#sortSelect { padding:10px; border-radius:5px; border:none; background:#222; color:#eee; }
+
+/* TASK LIST */
+ul.tasks { list-style:none; padding:0; margin-top:20px; }
+.tasks li {
+  background:#1e1e1e; padding:12px; margin-bottom:10px;
+  border-radius:8px; display:flex; justify-content:space-between; align-items:center;
+  gap:10px; box-shadow:0 0 5px #0ff33a20 inset;
+  transition:.3s;
+}
+.tasks li.dragging { opacity:0.5; }
+.tasks li.pinned { border-left:4px solid #0ff; }
+.tasks li.completed span { text-decoration:line-through; opacity:0.5; }
+.tasks li span small { color:#888; }
+.edit-btn { background:#a0f; color:#fff; }
+.delete-btn { background:#f00; color:#fff; }
+.complete-btn { background:#555; color:#fff; }
+.pin-btn { background:#0ff; color:#121212; }
+#importFile { display:none; }
+
+/* ================= FOOTER ================= */
+#footer {
+  background:#1c1c1c;
+  color:#0ff;
+  text-align:center;
+  padding:15px 20px;
+  font-size:14px;
+  border-top:1px solid #333;
+  box-shadow:0 -2px 10px rgba(0,255,255,0.2);
+}
+@media(max-width:768px){
+  #main { margin-left:0; }
+  #footer { font-size:12px; padding:10px 15px; }
+  #hamburger { display:block; }
+}
+
+/* ================= ANIMATIONS ================= */
+.fade-in { animation: fade 0.3s ease forwards; }
+@keyframes fade { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+</style>
+</head>
+<body>
+
+<!-- HAMBURGER BUTTON -->
+<button id="hamburger" onclick="toggleSidebar()">☰</button>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <h2>Categories</h2>
+  <ul id="categoryList">
+    <li class="active" onclick="filterCategory('All')">All</li>
+    <li onclick="filterCategory('Work')">Work</li>
+    <li onclick="filterCategory('Personal')">Personal</li>
+    <li onclick="filterCategory('Shopping')">Shopping</li>
+    <li onclick="filterCategory('School')">School</li>
+    <li onclick="filterCategory('Other')">Other</li>
+    <li onclick="filterCategory('Fitness')">Fitness</li>
+    <li onclick="filterCategory('Study')">Study</li>
+    <li onclick="filterCategory('Projects')">Projects</li>
+  </ul>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="main">
+  <h2>Tasks</h2>
+  <div class="task-controls">
+    <input id="taskInput" placeholder="New task...">
+    <select id="categorySelect">
+      <option>Work</option><option>Personal</option><option>Shopping</option>
+      <option>School</option><option>Other</option><option>Fitness</option>
+      <option>Study</option><option>Projects</option>
+    </select>
+    <input type="datetime-local" id="reminderTime">
+    <button class="primary" onclick="addTask()">Add</button>
+  </div>
+
+  <input id="searchBar" placeholder="Search tasks..." oninput="displayTasks()">
+  <select id="sortSelect" onchange="displayTasks()">
+    <option value="newest">Newest</option>
+    <option value="oldest">Oldest</option>
+    <option value="alpha">A → Z</option>
+    <option value="category">Category</option>
+  </select>
+
+  <br><br>
+  <button class="primary" onclick="exportTasks()">Export</button>
+  <button class="primary" onclick="document.getElementById('importFile').click()">Import</button>
+  <input type="file" id="importFile" onchange="importTasks(event)">
+
+  <ul id="taskList" class="tasks"></ul>
+
+  <h3>Upcoming Reminders</h3>
+  <ul id="reminderList" class="tasks"></ul>
+</div>
+
+<!-- AUDIO ALERT -->
+<audio id="reminderAudio" src="alarm.mp3" preload="auto"></audio>
+
+<!-- FOOTER -->
+<footer id="footer">
+  <p>Ultimate Dark Mode To-Do App | Version 1.0</p>
+  <p>Made with 💜 &amp; 💙 by YourName</p>
+</footer>
+
+<script>
+/* ================= INDEXEDDB ================= */
+let db;
+let request = indexedDB.open("DarkTodoDB",1);
+request.onupgradeneeded = e => {
+  db = e.target.result;
+  let store = db.createObjectStore("tasks",{keyPath:"id", autoIncrement:true});
+  store.createIndex("completed","completed");
+  store.createIndex("pinned","pinned");
+  store.createIndex("category","category");
+};
+request.onsuccess = e => { db = e.target.result; displayTasks(); checkReminders(); };
+request.onerror = ()=>console.log("DB error");
+
+/* ================= SIDEBAR TOGGLE ================= */
+function toggleSidebar(){
+  let sidebar=document.getElementById("sidebar");
+  sidebar.classList.toggle("hidden");
+}
+
+/* ================= TASK MANAGEMENT ================= */
+function addTask(){
+  let text=document.getElementById("taskInput").value.trim();
+  let category=document.getElementById("categorySelect").value;
+  let reminder=document.getElementById("reminderTime").value;
+  if(!text) return;
+
+  let tx=db.transaction("tasks","readwrite");
+  let store=tx.objectStore("tasks");
+  store.add({text, category, completed:false, pinned:false, created:Date.now(), reminder, notified:false});
+  tx.oncomplete=()=>{document.getElementById("taskInput").value=""; displayTasks();}
+}
+
+/* ================= DISPLAY TASKS ================= */
+let currentCategory="All";
+function filterCategory(cat){
+  currentCategory=cat;
+  [...document.querySelectorAll("#categoryList li")].forEach(li=>li.classList.remove("active"));
+  event.target.classList.add("active");
+  displayTasks();
+}
+
+function displayTasks(){
+  let list=document.getElementById("taskList");
+  list.innerHTML="";
+  let search=document.getElementById("searchBar").value.toLowerCase();
+  let sort=document.getElementById("sortSelect").value;
+  let tx=db.transaction("tasks","readonly");
+  let store=tx.objectStore("tasks");
+  let tasks=[];
+  store.openCursor().onsuccess=e=>{
+    let cursor=e.target.result;
+    if(cursor){
+      let t=cursor.value;
+      if((currentCategory=="All" || t.category==currentCategory) && t.text.toLowerCase().includes(search))
+        tasks.push(t);
+      cursor.continue();
+    } else {
+      if(sort=="alpha") tasks.sort((a,b)=>a.text.localeCompare(b.text));
+      if(sort=="category") tasks.sort((a,b)=>a.category.localeCompare(b.category));
+      if(sort=="newest") tasks.sort((a,b)=>b.created - a.created);
+      if(sort=="oldest") tasks.sort((a,b)=>a.created - b.created);
+      tasks.sort((a,b)=>b.pinned - a.pinned);
+      tasks.forEach(addTaskToList);
+    }
+  };
+}
+
+function addTaskToList(task){
+  let li=document.createElement("li");
+  li.classList.add("fade-in");
+  if(task.pinned) li.classList.add("pinned");
+  if(task.completed) li.classList.add("completed");
+  li.draggable=true;
+  li.innerHTML=`<span>${task.text} <small>[${task.category}]</small></span>
+    <div>
+      <button class="pin-btn" onclick="togglePin(${task.id})">📌</button>
+      <button class="complete-btn" onclick="toggleComplete(${task.id})">✓</button>
+      <button class="edit-btn" onclick="editTask(${task.id})">✎</button>
+      <button class="delete-btn" onclick="deleteTask(${task.id})">🗑</button>
+    </div>`;
+  li.addEventListener("dragstart",()=>li.classList.add("dragging"));
+  li.addEventListener("dragend",()=>li.classList.remove("dragging"));
+  document.getElementById("taskList").appendChild(li);
+}
+
+/* ================= EDIT, COMPLETE, PIN, DELETE ================= */
+function editTask(id){
+  let newText=prompt("Edit task:");
+  if(!newText) return;
+  let tx=db.transaction("tasks","readwrite");
+  let store=tx.objectStore("tasks");
+  store.get(id).onsuccess=e=>{
+    let t=e.target.result;
+    t.text=newText; store.put(t); displayTasks();
+  };
+}
+
+function toggleComplete(id){
+  let tx=db.transaction("tasks","readwrite");
+  let store=tx.objectStore("tasks");
+  store.get(id).onsuccess=e=>{
+    let t=e.target.result;
+    t.completed=!t.completed; store.put(t); displayTasks();
+  };
+}
+
+function togglePin(id){
+  let tx=db.transaction("tasks","readwrite");
+  let store=tx.objectStore("tasks");
+  store.get(id).onsuccess=e=>{
+    let t=e.target.result;
+    t.pinned=!t.pinned; store.put(t); displayTasks();
+  };
+}
+
+function deleteTask(id){
+  if(!confirm("Delete this task?")) return;
+  let tx=db.transaction("tasks","readwrite");
+  tx.objectStore("tasks").delete(id);
+  tx.oncomplete=()=>displayTasks();
+}
+
+/* ================= EXPORT / IMPORT ================= */
+function exportTasks(){
+  let tx=db.transaction("tasks","readonly");
+  let store=tx.objectStore("tasks");
+  let tasks=[];
+  store.openCursor().onsuccess=e=>{
+    let cursor=e.target.result;
+    if(cursor){tasks.push(cursor.value); cursor.continue();}
+    else {
+      let blob=new Blob([JSON.stringify(tasks,null,2)],{type:"application/json"});
+      let url=URL.createObjectURL(blob);
+      let a=document.createElement("a"); a.href=url; a.download="tasks.json"; a.click();
+    }
+  };
+}
+
+function importTasks(e){
+  let file=e.target.files[0]; let reader=new FileReader();
+  reader.onload=function(ev){
+    let data=JSON.parse(ev.target.result);
+    let tx=db.transaction("tasks","readwrite");
+    let store=tx.objectStore("tasks");
+    data.forEach(t=>store.add(t));
+    tx.oncomplete=()=>displayTasks();
+  }; reader.readAsText(file);
+}
+
+/* ================= REMINDERS WITH AUDIO ================= */
+function checkReminders(){
+  if(!("Notification" in window)) return;
+  if(Notification.permission!=="granted") Notification.requestPermission();
+
+  function updateReminders(){
+    let tx=db.transaction("tasks","readonly");
+    let store=tx.objectStore("tasks");
+    let now = new Date();
+    let reminderList = document.getElementById("reminderList");
+    reminderList.innerHTML = "";
+
+    store.openCursor().onsuccess = e => {
+      let cursor = e.target.result;
+      if(cursor){
+        let t = cursor.value;
+        if(t.reminder && new Date(t.reminder) <= now && !t.completed){
+          // Play notification sound and show browser notification
+          if(!t.notified){
+            new Notification("Task Reminder", {body:t.text});
+            document.getElementById("reminderAudio").play(); // 🔊 Audio alert
+            let tx2=db.transaction("tasks","readwrite");
+            let s=tx2.objectStore("tasks"); t.notified=true; s.put(t);
+          }
+          // Display in Reminder List
+          let li = document.createElement("li");
+          li.innerHTML = `${t.text} <small>[${t.category}]</small>
+            <div>
+              <button onclick="toggleComplete(${t.id})">✓</button>
+              <button onclick="snooze(${t.id})">⏰ Snooze 5 min</button>
+            </div>`;
+          reminderList.appendChild(li);
+        }
+        cursor.continue();
+      }
+    };
+  }
+
+  updateReminders();
+  setInterval(updateReminders,10000);
+}
+
+// Snooze function
+function snooze(id){
+  let tx=db.transaction("tasks","readwrite");
+  let store=tx.objectStore("tasks");
+  store.get(id).onsuccess=e=>{
+    let t=e.target.result;
+    let newTime = new Date(Date.now() + 5*60*1000); // 5 minutes later
+    t.reminder = newTime.toISOString().slice(0,16);
+    t.notified=false;
+    store.put(t);
+    displayTasks();
+    checkReminders();
+  };
+}
+
+/* ================= DRAG & DROP ================= */
+let taskListEl=document.getElementById("taskList");
+taskListEl?.addEventListener("dragover",e=>{
+  e.preventDefault();
+  let dragging=document.querySelector(".dragging");
+  let after=[...taskListEl.children].find(li=>e.clientY<=li.offsetTop+li.offsetHeight/2);
+  if(after) taskListEl.insertBefore(dragging,after);
+  else taskListEl.appendChild(dragging);
+});
+</script>
+
+</body>
+</html>
